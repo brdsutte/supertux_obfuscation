@@ -80,6 +80,9 @@ public:
   void add_player();
   void remove_player(int player_id);
 
+  static int decode_coins(int x);
+  static int encode_coins(int x);
+  
 private:
   void parse_bonus_mapping(const ReaderMapping& map, int id);
 

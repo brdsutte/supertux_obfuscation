@@ -68,14 +68,14 @@ PlayerStatusHUD::draw(DrawingContext& context)
     return;
 
   if ((displayed_coins == DISPLAYED_COINS_UNSET) ||
-      (std::abs(displayed_coins - m_player_status.coins) > 100)) {
-    displayed_coins = m_player_status.coins;
+      (std::abs(displayed_coins - PlayerStatus::decode_coins(m_player_status.coins)) > 100)) {
+    displayed_coins =  PlayerStatus::decode_coins(m_player_status.coins);
     displayed_coins_frame = 0;
   }
   if (++displayed_coins_frame > 2) {
     displayed_coins_frame = 0;
-    if (displayed_coins < m_player_status.coins) displayed_coins++;
-    if (displayed_coins > m_player_status.coins) displayed_coins--;
+    if (displayed_coins < PlayerStatus::decode_coins(m_player_status.coins)) displayed_coins++;
+    if (displayed_coins > PlayerStatus::decode_coins(m_player_status.coins)) displayed_coins--;
   }
   displayed_coins = std::min(std::max(displayed_coins, 0), m_player_status.get_max_coins());
 

@@ -37,7 +37,7 @@ PlayerStatus::PlayerStatus(int num_players) :
   m_num_players(num_players),
   m_item_pockets(num_players),
   m_override_item_pocket(Level::INHERIT),
-  coins(START_COINS),
+  coins(encode_coins(START_COINS)),
   bonus(num_players),
   worldmap_sprite("images/worldmap/common/tux.sprite"),
   last_worldmap(),
@@ -55,17 +55,17 @@ PlayerStatus::PlayerStatus(int num_players) :
 void
 PlayerStatus::take_checkpoint_coins()
 {
-  int subtract_value = std::max(coins / 10, 25);
-  if (coins - subtract_value >= 0)
-    coins -= subtract_value;
+  int subtract_value = std::max(decode_coins(coins) / 10, 25);
+  if (decode_coins(coins) - subtract_value >= 0)
+    coins = encode_coins(decode_coins(coins)-subtract_value);
   else
-    coins = 0;
+    coins = encode_coins(0);
 }
 
 void
 PlayerStatus::reset(int num_players)
 {
-  coins = START_COINS;
+  coins = encode_coins(START_COINS);
 
   // Keep in sync with a section in read()
   bonus.clear();
@@ -157,10 +157,23 @@ PlayerStatus::get_bonus_sprite(BonusType bonustype)
   }
 }
 
+int
+PlayerStatus::decode_coins(int x)
+{
+  return x + 10;
+}
+
+int
+PlayerStatus::encode_coins(int x)
+{
+  return x - 10;
+}
+
+
 void
 PlayerStatus::add_coins(int count, bool play_sound)
 {
-  coins = std::min(coins + count, MAX_COINS);
+  coins = encode_coins(std::min(decode_coins(coins) + count, MAX_COINS));
 
   if (!play_sound)
     return;
@@ -195,7 +208,7 @@ PlayerStatus::write(Writer& writer)
     }
   }
 
-  writer.write("coins", coins);
+  writer.write("coins", decode_coins(coins));
 
   writer.write("worldmap-sprite", worldmap_sprite, false);
   writer.write("last-worldmap", last_worldmap, false);
@@ -251,6 +264,7 @@ PlayerStatus::read(const ReaderMapping& mapping)
   parse_bonus_mapping(mapping, 0);
 
   mapping.get("coins", coins);
+  coins = encode_coins(coins);
 
   mapping.get("worldmap-sprite", worldmap_sprite);
   mapping.get("last-worldmap", last_worldmap);

@@ -195,7 +195,7 @@ public:
    * @scripting
    * @description Returns the number of coins the player currently has.
    */
-  inline int get_coins() const { return m_player_status.coins; }
+  inline int get_coins() const { return PlayerStatus::decode_coins(m_player_status.coins); }
 
   /** picks up a bonus, taking care not to pick up lesser bonus items than we already have
 
