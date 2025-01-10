@@ -106,6 +106,7 @@ ConfigSubsystem::ConfigSubsystem() :
   // init random number stuff
   gameRandom.seed(m_config.random_seed);
   graphicsRandom.seed(0);
+  obfuscationRandom.seed(0);
   //const char *how = config->random_seed? ", user fixed.": ", from time().";
   //log_info << "Using random seed " << config->random_seed << how << std::endl;
 }

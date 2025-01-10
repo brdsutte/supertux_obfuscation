@@ -79,13 +79,17 @@ public:
 
   void add_player();
   void remove_player(int player_id);
+  void set_coins(int coins);
+  int get_coins();
 
-  static int decode_coins(int x);
-  static int encode_coins(int x);
-  
 private:
   void parse_bonus_mapping(const ReaderMapping& map, int id);
 
+  void setup_coins_array(int size, int realloc_freq, int realloc_on_read_param);
+  void realloc_coins_array();
+  void update_xor_mask();
+  void update_splitting_mask();
+  
 private:
   /// PowerUp that flings itself upwards
   /// can't be collected right away.
@@ -112,7 +116,24 @@ public:
   std::vector<BonusType> m_item_pockets;
   Level::Setting m_override_item_pocket;
 
-  int coins;
+  int ** coins_array;
+  int elements_in_coins_array;
+  int realloc_frequency;
+  int realloc_on_read;
+
+  unsigned int xor_mask;
+  int update_xor_mask_frequency;
+  int update_xor_mask_on_read;
+  int enable_xor_masking;
+
+  unsigned int splitting_mask;
+  int enable_variable_splitting;
+  int update_splitting_mask_frequency;
+  int update_splitting_mask_on_read;
+
+  int is_updating;
+  int offset;
+  
   std::vector<BonusType> bonus;
 
   std::string worldmap_sprite; /**< the sprite of Tux that should be used in worldmap */

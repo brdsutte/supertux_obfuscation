@@ -112,7 +112,7 @@ GameSession::reset_level()
   }
 
   PlayerStatus& currentStatus = m_savegame.get_player_status();
-  currentStatus.coins = m_coins_at_start;
+  currentStatus.set_coins(m_coins_at_start);
   currentStatus.bonus = m_boni_at_start;
 
   clear_respawn_points();
@@ -156,8 +156,8 @@ GameSession::on_player_removed(int id)
 void
 GameSession::restart_level(bool after_death, bool preserve_music)
 {
-  const PlayerStatus& currentStatus = m_savegame.get_player_status();
-  m_coins_at_start = currentStatus.coins;
+  PlayerStatus& currentStatus = m_savegame.get_player_status();
+  m_coins_at_start = currentStatus.get_coins();
   m_boni_at_start = currentStatus.bonus;
 
   // Needed for the title screen apparently.
@@ -407,7 +407,7 @@ GameSession::abort_level()
   }
 
   PlayerStatus& currentStatus = m_savegame.get_player_status();
-  currentStatus.coins = m_coins_at_start;
+  currentStatus.set_coins(m_coins_at_start);
   SoundManager::current()->stop_sounds();
 }
 

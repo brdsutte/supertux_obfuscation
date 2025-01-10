@@ -18,9 +18,11 @@
 
 #include <ctime>
 #include <limits>
+#include <iostream>
 
 Random graphicsRandom;
 Random gameRandom;
+Random obfuscationRandom;
 
 Random::Random() :
   m_generator()

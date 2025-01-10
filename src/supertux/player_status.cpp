@@ -29,6 +29,7 @@
 #include "util/writer.hpp"
 #include "worldmap/level_tile.hpp"
 #include "worldmap/worldmap.hpp"
+#include "math/random.hpp"
 
 static const int START_COINS = 100;
 static const int MAX_COINS = 9999;
@@ -37,12 +38,56 @@ PlayerStatus::PlayerStatus(int num_players) :
   m_num_players(num_players),
   m_item_pockets(num_players),
   m_override_item_pocket(Level::INHERIT),
-  coins(encode_coins(START_COINS)),
   bonus(num_players),
   worldmap_sprite("images/worldmap/common/tux.sprite"),
   last_worldmap(),
-  title_level()
+  title_level(),
+  is_updating(0)
 {
+  // first param: number of integers reserved to store coins encoding
+  // second param: per how many accesses relocation of the coins location in memory changes (0 means no relocation)
+  // third param: zero: only realloc on set_coins(), non-zero: also realloc on get_coins()
+
+  int nr_integers_to_store = 1;
+
+  obfuscationRandom.seed(0);
+
+  /* PART 1: XOR-masking */
+
+  // zero = no XOR-masking, non-zero = XOR masking
+  enable_xor_masking = 1;
+  
+  // initial mask for XOR-masking
+  xor_mask = 0x0abcd123;
+
+  // zero = static mask with above value, non-zero = per how many accesses mask is updated 
+  update_xor_mask_frequency = 10;
+
+  // zero = only update mask on set_coins(), non-zero = also update mas on get_coins()
+  update_xor_mask_on_read = 1;
+
+
+  /* PART 2: mask-based variable splitting */
+
+  enable_variable_splitting = 1;
+  
+  splitting_mask = 0x1234fedc;
+
+  update_splitting_mask_frequency = 1;
+
+  update_splitting_mask_on_read = 1;
+
+  /* PART 3: add offset */
+  
+  // #coins - offset will be stored instead of #coins
+  offset = 0;
+  
+  if (enable_variable_splitting) nr_integers_to_store = 2;
+
+  setup_coins_array(nr_integers_to_store,0,0);
+  
+  set_coins(START_COINS),
+
   reset(num_players);
 
   // FIXME: Move sound handling into PlayerStatusHUD
@@ -55,17 +100,20 @@ PlayerStatus::PlayerStatus(int num_players) :
 void
 PlayerStatus::take_checkpoint_coins()
 {
-  int subtract_value = std::max(decode_coins(coins) / 10, 25);
-  if (decode_coins(coins) - subtract_value >= 0)
-    coins = encode_coins(decode_coins(coins)-subtract_value);
-  else
-    coins = encode_coins(0);
+  int coins = get_coins();
+  int subtract_value = std::max(coins / 10, 25);
+  if (coins - subtract_value >= 0){
+    set_coins(coins-subtract_value);
+  }
+  else {
+    set_coins(0);
+  }
 }
 
 void
 PlayerStatus::reset(int num_players)
 {
-  coins = encode_coins(START_COINS);
+  set_coins(START_COINS);
 
   // Keep in sync with a section in read()
   bonus.clear();
@@ -157,23 +205,118 @@ PlayerStatus::get_bonus_sprite(BonusType bonustype)
   }
 }
 
-int
-PlayerStatus::decode_coins(int x)
+
+// first param: number of integers reserved to store coins encoding
+// second param: per how many accesses relocation of the coins location in memory changes (0 means no relocation)
+// third param: 0: only realloc on set_coins(), non-zero: also realloc on get_coins()
+void PlayerStatus::setup_coins_array(int size, int realloc_freq, int realloc_on_read_param)
 {
-  return x + 10;
+  int i;
+  elements_in_coins_array = size;
+  coins_array = (int**)malloc(elements_in_coins_array*sizeof(int*));
+  for (i=0;i<size;i++)
+    coins_array[i] = (int*)malloc(sizeof(int));
+  realloc_frequency = realloc_freq;
+  realloc_on_read = realloc_on_read_param;
 }
 
-int
-PlayerStatus::encode_coins(int x)
-{
-  return x - 10;
+void PlayerStatus::realloc_coins_array(){
+  int i;
+  if (realloc_frequency == 0)
+    return;
+   
+  if (obfuscationRandom.rand(realloc_frequency)!=0)
+    return;
+  
+  for (i=0;i<elements_in_coins_array;i++){
+    int old_value = *coins_array[i];
+    free(coins_array[i]);
+    coins_array[i] = (int*)malloc(sizeof(int));
+    *coins_array[i] = old_value;
+  }
 }
 
+void PlayerStatus::update_xor_mask(){
+  if (is_updating) return;
+  is_updating = 1;
+  if (enable_xor_masking && update_xor_mask_frequency){
+    if (obfuscationRandom.rand(update_xor_mask_frequency)==0) {
+      int coins = get_coins();
+      //      std::cout << "update coin mask from " << xor_mask << " to ";
+      xor_mask = obfuscationRandom.rand();
+      //      std::cout << xor_mask << "\n";
+      set_coins(coins);
+    }
+    else {
+      //      std::cout << "skip update stochastically\n";
+    }
+  }
+  is_updating = 0;
+}
+
+
+
+void PlayerStatus::update_splitting_mask(){
+  if (is_updating) return;
+  is_updating = 1;
+  if (enable_variable_splitting && update_splitting_mask_frequency){
+    if (obfuscationRandom.rand(update_splitting_mask_frequency)==0) {
+      int coins = get_coins();
+      //      std::cout << "update coin mask from " << xor_mask << " to ";
+      splitting_mask = obfuscationRandom.rand();
+      //      std::cout << xor_mask << "\n";
+      set_coins(coins);
+    }
+    else {
+      //      std::cout << "skip update stochastically\n";
+    }
+  }
+  is_updating = 0;
+}
+
+void PlayerStatus::set_coins(int coins)
+{
+  coins -= offset;
+  realloc_coins_array();
+  update_xor_mask();
+  update_splitting_mask();
+  
+  if (enable_xor_masking)
+    coins ^= xor_mask;
+
+  if (enable_variable_splitting){
+    *coins_array[0] = coins & ~splitting_mask;
+    *coins_array[1] = coins & splitting_mask;
+  }
+  else{
+    *coins_array[0] = coins;
+  }
+}
+
+int PlayerStatus::get_coins()
+{
+  int coins;
+  if (realloc_on_read) realloc_coins_array();
+  if (update_xor_mask_on_read) update_xor_mask();
+  if (update_splitting_mask_on_read) update_splitting_mask();
+  
+  coins = *coins_array[0];
+  if (enable_variable_splitting)
+    coins |= *coins_array[1];
+    
+  if (enable_xor_masking)
+    coins ^= xor_mask;
+
+  coins += offset;
+  
+  return coins;
+  //    std::cout << "read " << *coins_array[0] << " ^ " << xor_mask << " = " << ((*coins_array[0])  ^ xor_mask) << "\n";
+}
 
 void
 PlayerStatus::add_coins(int count, bool play_sound)
 {
-  coins = encode_coins(std::min(decode_coins(coins) + count, MAX_COINS));
+  set_coins(std::min(get_coins()+count,MAX_COINS));
 
   if (!play_sound)
     return;
@@ -208,7 +351,7 @@ PlayerStatus::write(Writer& writer)
     }
   }
 
-  writer.write("coins", decode_coins(coins));
+  writer.write("coins", get_coins());
 
   writer.write("worldmap-sprite", worldmap_sprite, false);
   writer.write("last-worldmap", last_worldmap, false);
@@ -263,8 +406,9 @@ PlayerStatus::read(const ReaderMapping& mapping)
 
   parse_bonus_mapping(mapping, 0);
 
+  int coins;
   mapping.get("coins", coins);
-  coins = encode_coins(coins);
+  set_coins(coins);
 
   mapping.get("worldmap-sprite", worldmap_sprite);
   mapping.get("last-worldmap", last_worldmap);

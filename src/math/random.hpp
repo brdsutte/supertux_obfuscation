@@ -56,6 +56,10 @@ extern Random graphicsRandom;
 /** Use for game-changing random numbers */
 extern Random gameRandom;
 
+/** Use for dynamic obfuscation random numbers */
+extern Random obfuscationRandom;
+
+
 #endif
 
 /* EOF */
