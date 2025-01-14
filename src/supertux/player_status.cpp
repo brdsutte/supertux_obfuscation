@@ -46,9 +46,6 @@ PlayerStatus::PlayerStatus(int num_players) :
   title_level(),
   is_updating(0)
 {
-  // first param: number of integers reserved to store coins encoding
-  // second param: per how many accesses relocation of the coins location in memory changes (0 means no relocation)
-  // third param: zero: only realloc on set_coins(), non-zero: also realloc on get_coins()
 
   int nr_integers_to_store = 1;
 
@@ -57,7 +54,7 @@ PlayerStatus::PlayerStatus(int num_players) :
   /* PART 1: XOR-masking */
 
   // zero = no XOR-masking, non-zero = XOR masking
-  enable_xor_masking = 1;
+  enable_xor_masking = 0;
   
   // initial mask for XOR-masking
   xor_mask = 0x0abcd123;
@@ -71,7 +68,7 @@ PlayerStatus::PlayerStatus(int num_players) :
 
   /* PART 2: mask-based variable splitting */
 
-  enable_variable_splitting = 1;
+  enable_variable_splitting = 0;
   
   splitting_mask = 0x1234fedc;
 
@@ -86,12 +83,33 @@ PlayerStatus::PlayerStatus(int num_players) :
   
   if (enable_variable_splitting) nr_integers_to_store = 2;
 
+
+  /* part 4: RNC */
+
+  enable_rnc = 1;
+
+  if (enable_rnc && (enable_variable_splitting || enable_xor_masking || offset!=0)){
+    std::cout << "Unsupported combination of data obfuscations\n";
+    exit(-1);
+  }
+
+  if (enable_rnc) nr_integers_to_store = 2;
+
+  initialize_rnc(7639,8431);
+
+
+  // first param: number of integers reserved to store coins encoding
+  // second param: per how many accesses relocation of the coins location in memory changes (0 means no relocation)
+  // third param: zero: only realloc on set_coins(), non-zero: also realloc on get_coins()
+
   setup_coins_array(nr_integers_to_store,0,0);
-  
+
+  std::cout << "aha3\n";
   set_coins(START_COINS),
 
   reset(num_players);
 
+  
   // FIXME: Move sound handling into PlayerStatusHUD
   if (SoundManager::current()) {
     SoundManager::current()->preload("sounds/coin.wav");
@@ -99,15 +117,19 @@ PlayerStatus::PlayerStatus(int num_players) :
   }
 }
 
+
+
 void
 PlayerStatus::take_checkpoint_coins()
 {
   int coins = get_coins();
   int subtract_value = std::max(coins / 10, 25);
   if (coins - subtract_value >= 0){
+    std::cout << "aha4\n";
     set_coins(coins-subtract_value);
   }
   else {
+    std::cout << "aha5\n";
     set_coins(0);
   }
 }
@@ -115,6 +137,7 @@ PlayerStatus::take_checkpoint_coins()
 void
 PlayerStatus::reset(int num_players)
 {
+  std::cout << "aha6\n";
   set_coins(START_COINS);
 
   // Keep in sync with a section in read()
@@ -238,6 +261,14 @@ void PlayerStatus::realloc_coins_array(){
   }
 }
 
+void PlayerStatus::initialize_rnc(int m1, int m2){
+  rnc_moduli[0]=m1;
+  rnc_moduli[1]=m2;
+  rnc_inverses[0]=modularInverse(m2,m1);
+  rnc_inverses[1]=modularInverse(m1,m2);
+  std::cout << "initialized for m1 = M2 = " << m1 << " ; m2 = M1 = " << m2 << " ; y1 = " << rnc_inverses[0] << " ; y2 = " << rnc_inverses[1] << "\n"; 
+}
+
 void PlayerStatus::update_xor_mask(){
   if (is_updating) return;
   is_updating = 1;
@@ -247,6 +278,7 @@ void PlayerStatus::update_xor_mask(){
       //      std::cout << "update coin mask from " << xor_mask << " to ";
       xor_mask = obfuscationRandom.rand();
       //      std::cout << xor_mask << "\n";
+      std::cout << "aha7\n";
       set_coins(coins);
     }
     else {
@@ -267,6 +299,7 @@ void PlayerStatus::update_splitting_mask(){
       //      std::cout << "update coin mask from " << xor_mask << " to ";
       splitting_mask = obfuscationRandom.rand();
       //      std::cout << xor_mask << "\n";
+      std::cout << "aha8\n";
       set_coins(coins);
     }
     else {
@@ -309,8 +342,18 @@ void PlayerStatus::set_coins(int coins)
 {
   coins -= offset;
   realloc_coins_array();
-  update_xor_mask();
-  update_splitting_mask();
+  if (enable_xor_masking)  update_xor_mask();
+  if (enable_variable_splitting) update_splitting_mask();
+
+  if (enable_rnc) {
+    int m1 = rnc_moduli[0];
+    int m2 = rnc_moduli[1];
+    std::cout << "storing " << coins << " (offset " << offset << ") " ;
+    *coins_array[0] = coins % m1;// + m1 * obfuscationRandom.rand(100);
+    *coins_array[1] = coins % m2;// + m2 * obfuscationRandom.rand(100);
+    std::cout << "as r1 = " << *coins_array[0] << " ; r2 = " << *coins_array[1] << "\n";
+    return;
+  }
   
   if (enable_xor_masking)
     coins ^= xor_mask;
@@ -328,9 +371,18 @@ int PlayerStatus::get_coins()
 {
   int coins;
   if (realloc_on_read) realloc_coins_array();
-  if (update_xor_mask_on_read) update_xor_mask();
-  if (update_splitting_mask_on_read) update_splitting_mask();
-  
+  if (enable_xor_masking && update_xor_mask_on_read) update_xor_mask();
+  if (enable_variable_splitting && update_splitting_mask_on_read) update_splitting_mask();
+
+  if (enable_rnc) {
+    int m1 = rnc_moduli[0];
+    int m2 = rnc_moduli[1];
+    int y1 = rnc_inverses[0];
+    int y2 = rnc_inverses[1];
+    coins = (*coins_array[0] * m2 * y1 + *coins_array[1] * m1 * y2) % (m1*m2);
+    std::cout << "reading r1 = " << *coins_array[0] << " ; r2 = " << *coins_array[0] << " as " << coins << "\n";
+    return coins;
+  }
   coins = *coins_array[0];
   if (enable_variable_splitting)
     coins |= *coins_array[1];
@@ -347,6 +399,7 @@ int PlayerStatus::get_coins()
 void
 PlayerStatus::add_coins(int count, bool play_sound)
 {
+  std::cout << "aha1\n";
   set_coins(std::min(get_coins()+count,MAX_COINS));
 
   if (!play_sound)
@@ -438,7 +491,9 @@ PlayerStatus::read(const ReaderMapping& mapping)
   parse_bonus_mapping(mapping, 0);
 
   int coins;
+
   mapping.get("coins", coins);
+
   set_coins(coins);
 
   mapping.get("worldmap-sprite", worldmap_sprite);

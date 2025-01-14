@@ -89,6 +89,7 @@ private:
   void realloc_coins_array();
   void update_xor_mask();
   void update_splitting_mask();
+  void initialize_rnc(int m1, int m2);
   
 private:
   /// PowerUp that flings itself upwards
@@ -135,8 +136,8 @@ public:
   int offset;
 
   int enable_rnc;
-  int rnc[];
-  int rnc_inverses[];
+  int rnc_moduli[2];
+  int rnc_inverses[2];
   
   std::vector<BonusType> bonus;
 
