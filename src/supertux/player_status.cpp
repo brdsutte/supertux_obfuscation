@@ -54,7 +54,7 @@ PlayerStatus::PlayerStatus(int num_players) :
 
   obfuscationRandom.seed(0);
 
-  /* PART 1: XOR-masking */
+  /* PART 1: XOR-masking */ 
 
   // zero = no XOR-masking, non-zero = XOR masking
   enable_xor_masking = 1;
