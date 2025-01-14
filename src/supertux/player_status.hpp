@@ -133,6 +133,10 @@ public:
 
   int is_updating;
   int offset;
+
+  int enable_rnc;
+  int rnc[];
+  int rnc_inverses[];
   
   std::vector<BonusType> bonus;
 
