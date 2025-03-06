@@ -36,6 +36,7 @@ static const int MAX_COINS = 9999;
 
 int modularInverse(int a, int m);
 
+
 PlayerStatus::PlayerStatus(int num_players) :
   m_num_players(num_players),
   m_item_pockets(num_players),
@@ -51,42 +52,42 @@ PlayerStatus::PlayerStatus(int num_players) :
 
   obfuscationRandom.seed(0);
 
-  /* PART 1: XOR-masking */ 
+  /* PART 1: XOR-masking */
 
   // zero = no XOR-masking, non-zero = XOR masking
   enable_xor_masking = 0;
-  
-  // initial mask for XOR-masking
-  xor_mask = 0x0abcd123;
 
-  // zero = static mask with above value, non-zero = per how many accesses mask is updated 
-  update_xor_mask_frequency = 10;
+  // initial mask for XOR-masking
+  xor_mask = 0x0;
+
+  // zero = static mask with above value, non-zero = per how many accesses mask is updated
+  update_xor_mask_frequency = 0;
 
   // zero = only update mask on set_coins(), non-zero = also update mas on get_coins()
-  update_xor_mask_on_read = 1;
+  update_xor_mask_on_read = 0;
 
 
   /* PART 2: mask-based variable splitting */
 
   enable_variable_splitting = 0;
-  
+
   splitting_mask = 0x1234fedc;
 
-  update_splitting_mask_frequency = 1;
+  update_splitting_mask_frequency = 0;
 
-  update_splitting_mask_on_read = 1;
+  update_splitting_mask_on_read = 0;
 
   /* PART 3: add offset */
-  
+
   // #coins - offset will be stored instead of #coins
   offset = 0;
-  
+
   if (enable_variable_splitting) nr_integers_to_store = 2;
 
 
   /* part 4: RNC */
 
-  enable_rnc = 1;
+  enable_rnc = 0;
 
   if (enable_rnc && (enable_variable_splitting || enable_xor_masking || offset!=0)){
     std::cout << "Unsupported combination of data obfuscations\n";
@@ -109,7 +110,7 @@ PlayerStatus::PlayerStatus(int num_players) :
 
   reset(num_players);
 
-  
+
   // FIXME: Move sound handling into PlayerStatusHUD
   if (SoundManager::current()) {
     SoundManager::current()->preload("sounds/coin.wav");
@@ -249,10 +250,10 @@ void PlayerStatus::realloc_coins_array(){
   int i;
   if (realloc_frequency == 0)
     return;
-   
+
   if (obfuscationRandom.rand(realloc_frequency)!=0)
     return;
-  
+
   for (i=0;i<elements_in_coins_array;i++){
     int old_value = *coins_array[i];
     free(coins_array[i]);
@@ -266,7 +267,7 @@ void PlayerStatus::initialize_rnc(int m1, int m2){
   rnc_moduli[1]=m2;
   rnc_inverses[0]=modularInverse(m2,m1);
   rnc_inverses[1]=modularInverse(m1,m2);
-  std::cout << "initialized for m1 = M2 = " << m1 << " ; m2 = M1 = " << m2 << " ; y1 = " << rnc_inverses[0] << " ; y2 = " << rnc_inverses[1] << "\n"; 
+  std::cout << "initialized for m1 = M2 = " << m1 << " ; m2 = M1 = " << m2 << " ; y1 = " << rnc_inverses[0] << " ; y2 = " << rnc_inverses[1] << "\n";
 }
 
 void PlayerStatus::update_xor_mask(){
@@ -312,29 +313,29 @@ void PlayerStatus::update_splitting_mask(){
 int modularInverse(int a, int m) {
   int m0 = m, t, q;
   int x0 = 0, x1 = 1;
-  
+
   if (m == 1) return 0; // Inverse doesn't exist if m = 1
-  
+
   // Apply Extended Euclidean Algorithm
   while (a > 1) {
     // q is quotient
     q = a / m;
-    
+
     t = m;
-    
+
     // m is remainder now, apply Euclid's algorithm
     m = a % m, a = t;
-    
+
     t = x0;
-    
+
     // Update x0 and x1
     x0 = x1 - q * x0;
     x1 = t;
   }
-  
+
   // Ensure x1 is positive
   if (x1 < 0) x1 += m0;
-  
+
   return x1;
 }
 
@@ -354,7 +355,7 @@ void PlayerStatus::set_coins(int coins)
     std::cout << "as r1 = " << *coins_array[0] << " ; r2 = " << *coins_array[1] << "\n";
     return;
   }
-  
+
   if (enable_xor_masking)
     coins ^= xor_mask;
 
@@ -365,6 +366,9 @@ void PlayerStatus::set_coins(int coins)
   else{
     *coins_array[0] = coins;
   }
+  std::cout << "called set_coins!" << std::endl;
+  std::cout << **coins_array << std::endl;
+  std::cout << *coins_array << std::endl;
 }
 
 int PlayerStatus::get_coins()
@@ -386,12 +390,12 @@ int PlayerStatus::get_coins()
   coins = *coins_array[0];
   if (enable_variable_splitting)
     coins |= *coins_array[1];
-    
+
   if (enable_xor_masking)
     coins ^= xor_mask;
 
   coins += offset;
-  
+
   return coins;
   //    std::cout << "read " << *coins_array[0] << " ^ " << xor_mask << " = " << ((*coins_array[0])  ^ xor_mask) << "\n";
 }
