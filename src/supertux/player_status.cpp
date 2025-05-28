@@ -93,9 +93,9 @@ PlayerStatus::PlayerStatus(int num_players) :
     exit(-1);
   }
 
-  if (enable_rnc) nr_integers_to_store = 2;
+  if (enable_rnc) nr_integers_to_store = 3;
 
-  initialize_rnc(7639,8431);
+  initialize_rnc(89,97,93);
 
 
   // first param: number of integers reserved to store coins encoding
@@ -104,7 +104,7 @@ PlayerStatus::PlayerStatus(int num_players) :
 
   setup_coins_array(nr_integers_to_store,0,0);
 
-  std::cout << "aha3\n";
+  //  std::cout << "aha3\n";
   set_coins(START_COINS),
 
   reset(num_players);
@@ -125,11 +125,11 @@ PlayerStatus::take_checkpoint_coins()
   int coins = get_coins();
   int subtract_value = std::max(coins / 10, 25);
   if (coins - subtract_value >= 0){
-    std::cout << "aha4\n";
+    //    std::cout << "aha4\n";
     set_coins(coins-subtract_value);
   }
   else {
-    std::cout << "aha5\n";
+    //    std::cout << "aha5\n";
     set_coins(0);
   }
 }
@@ -137,7 +137,7 @@ PlayerStatus::take_checkpoint_coins()
 void
 PlayerStatus::reset(int num_players)
 {
-  std::cout << "aha6\n";
+  //  std::cout << "aha6\n";
   set_coins(START_COINS);
 
   // Keep in sync with a section in read()
@@ -261,12 +261,14 @@ void PlayerStatus::realloc_coins_array(){
   }
 }
 
-void PlayerStatus::initialize_rnc(int m1, int m2){
+void PlayerStatus::initialize_rnc(int m1, int m2, int m3){
   rnc_moduli[0]=m1;
   rnc_moduli[1]=m2;
-  rnc_inverses[0]=modularInverse(m2,m1);
-  rnc_inverses[1]=modularInverse(m1,m2);
-  std::cout << "initialized for m1 = M2 = " << m1 << " ; m2 = M1 = " << m2 << " ; y1 = " << rnc_inverses[0] << " ; y2 = " << rnc_inverses[1] << "\n"; 
+  rnc_moduli[2]=m3;
+  rnc_inverses[0]=modularInverse(m2*m3,m1);
+  rnc_inverses[1]=modularInverse(m1*m3,m2);
+  rnc_inverses[2]=modularInverse(m1*m2,m3);
+  //std::cout << "initialized for m1 = " << m1 << " ; m2 = M1 = " << m2 << " ; y1 = " << rnc_inverses[0] << " ; y2 = " << rnc_inverses[1] << "\n"; 
 }
 
 void PlayerStatus::update_xor_mask(){
@@ -278,7 +280,7 @@ void PlayerStatus::update_xor_mask(){
       //      std::cout << "update coin mask from " << xor_mask << " to ";
       xor_mask = obfuscationRandom.rand();
       //      std::cout << xor_mask << "\n";
-      std::cout << "aha7\n";
+      //      std::cout << "aha7\n";
       set_coins(coins);
     }
     else {
@@ -299,7 +301,7 @@ void PlayerStatus::update_splitting_mask(){
       //      std::cout << "update coin mask from " << xor_mask << " to ";
       splitting_mask = obfuscationRandom.rand();
       //      std::cout << xor_mask << "\n";
-      std::cout << "aha8\n";
+      //      std::cout << "aha8\n";
       set_coins(coins);
     }
     else {
@@ -348,10 +350,12 @@ void PlayerStatus::set_coins(int coins)
   if (enable_rnc) {
     int m1 = rnc_moduli[0];
     int m2 = rnc_moduli[1];
-    std::cout << "storing " << coins << " (offset " << offset << ") " ;
+    int m3 = rnc_moduli[2];
+    // std::cout << "storing " << coins << " (offset " << offset << ") " ;
     *coins_array[0] = coins % m1;// + m1 * obfuscationRandom.rand(100);
     *coins_array[1] = coins % m2;// + m2 * obfuscationRandom.rand(100);
-    std::cout << "as r1 = " << *coins_array[0] << " ; r2 = " << *coins_array[1] << "\n";
+    *coins_array[2] = coins % m3;// + m2 * obfuscationRandom.rand(100);
+    //    std::cout << "as r1 = " << *coins_array[0] << " ; r2 = " << *coins_array[1] << " ; r3 = " << *coins_array[2] << "\n";
     return;
   }
   
@@ -375,12 +379,17 @@ int PlayerStatus::get_coins()
   if (enable_variable_splitting && update_splitting_mask_on_read) update_splitting_mask();
 
   if (enable_rnc) {
-    int m1 = rnc_moduli[0];
-    int m2 = rnc_moduli[1];
-    int y1 = rnc_inverses[0];
-    int y2 = rnc_inverses[1];
-    coins = (*coins_array[0] * m2 * y1 + *coins_array[1] * m1 * y2) % (m1*m2);
-    std::cout << "reading r1 = " << *coins_array[0] << " ; r2 = " << *coins_array[0] << " as " << coins << "\n";
+    long m1 = rnc_moduli[0];
+    long m2 = rnc_moduli[1];
+    long m3 = rnc_moduli[2];
+    long y1 = rnc_inverses[0];
+    long y2 = rnc_inverses[1];
+    long y3 = rnc_inverses[2];
+    long x1 = *coins_array[0];
+    long x2 = *coins_array[1];
+    long x3 = *coins_array[2];
+    coins = (int) (x1 * m2 * m3 * y1 + x2 * m1 * m3 * y2 + x3 * m1 * m2 * y3) % (m1*m2*m3);
+    //std::cout << "reading r1 = " << x1 << " ; r2 = " << x2 << " ; r3 = " << x3 << " as " << coins << "\n";
     return coins;
   }
   coins = *coins_array[0];
@@ -399,7 +408,7 @@ int PlayerStatus::get_coins()
 void
 PlayerStatus::add_coins(int count, bool play_sound)
 {
-  std::cout << "aha1\n";
+  //  std::cout << "aha1\n";
   set_coins(std::min(get_coins()+count,MAX_COINS));
 
   if (!play_sound)
@@ -494,6 +503,8 @@ PlayerStatus::read(const ReaderMapping& mapping)
 
   mapping.get("coins", coins);
 
+
+  //  std::cout << "aha9 " << coins << "\n";
   set_coins(coins);
 
   mapping.get("worldmap-sprite", worldmap_sprite);
